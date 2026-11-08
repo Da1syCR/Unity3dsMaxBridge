@@ -26,6 +26,10 @@ Checks:
 - Returned FBX with missing materials, unassigned (-1) and sparse material IDs.
 - Fresh, stale, malformed and missing Max heartbeat responses.
 - Invalid session JSON is reported by polling without escaping or leaving it busy.
+- Standalone package/assembly identity, generated connector paths and UTF-8 encoding.
+- English/Russian Unity language selection, including error messages.
+- Multiple material drops, duplicate filtering and queuing without a Max session.
+- Repeated session-file writes and temporary-file cleanup.
 
 For a real Max roundtrip, run `BridgeRegressionRunner.PrepareMax`, read the
 session directory in `<test project>/max-session.json`, and import it with the
@@ -37,4 +41,9 @@ writing results to `max-results.txt`. Keep export operations outside the modelin
 Undo record. The test project must be closed between batch invocations.
 
 Validated on Unity 6000.0.48f1 / FBX Exporter 5.1.3 and 3ds Max 2024.
-Tests do not modify the user's Gpu Instancer test project.
+
+## Русский
+
+Используйте отдельный тестовый проект Unity 6. Команда выше запускает regression-проверки, создаёт тестовые assets и завершает Unity с кодом 0 при успехе или 1 при ошибке. Итог — `regression-results.txt`. Автоматический вариант создания проекта описан в [CONTRIBUTING.md](../CONTRIBUTING.md).
+
+Проверяются обмен FBX, отмена правок, добавление мешей, пустые material ID, heartbeat, ошибочные сессии, генерация подключения, смена языка, очередь материалов и запись файлов сессии. Генерация ответных FBX через SDK не требует запущенного Max. Для реального обмена используйте методы PrepareMax / ApplyMaxEdit / ApplyMaxUndo, описанные выше.

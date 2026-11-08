@@ -10,6 +10,7 @@ parser.add_argument("--unity", required=True, type=Path, help="Path to an instal
 parser.add_argument("--project", required=True, type=Path, help="New, disposable project directory")
 parser.add_argument("--package", type=Path, default=Path(__file__).resolve().parents[1], help="Package folder to install (defaults to this checkout)")
 parser.add_argument("--unity-version", default="6000.0.48f1", help="Exact version of the supplied Editor (default: tested development version)")
+parser.add_argument("--git-url", help="Install this Git URL instead of a local package (release installation check)")
 args = parser.parse_args()
 unity = args.unity.resolve()
 project = args.project.resolve()
@@ -24,7 +25,7 @@ if project.exists() and any(project.iterdir()):
 (project / "ProjectSettings/ProjectVersion.txt").write_text("m_EditorVersion: " + args.unity_version + "\n", encoding="utf-8")
 (project / "Packages").mkdir()
 manifest = json.loads((package / "package.json").read_text(encoding="utf-8-sig"))
-dependencies = {manifest["name"]: "file:" + package.as_posix()}
+dependencies = {manifest["name"]: args.git_url or "file:" + package.as_posix()}
 for module in ("physics", "imgui", "imageconversion", "jsonserialize"):
     dependencies["com.unity.modules." + module] = "1.0.0"
 (project / "Packages/manifest.json").write_text(json.dumps({"dependencies": dependencies}, indent=2), encoding="utf-8")
