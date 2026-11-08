@@ -1,6 +1,6 @@
 {
   "name": "com.da1sycr.unity3dsmaxbridge",
-  "version": "0.2.0-beta.2",
+  "version": "0.2.0-beta.3",
   "displayName": "Unity3dsMaxBridge",
   "description": "Edit static Unity prefab meshes in 3ds Max and write geometry and material assignments back to source FBX assets.",
   "unity": "6000.0",

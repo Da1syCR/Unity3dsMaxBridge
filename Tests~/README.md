@@ -31,6 +31,7 @@ Checks:
 - Multiple material drops, duplicate filtering and queuing without a Max session.
 - Repeated session-file writes and temporary-file cleanup.
 - Next-update target registry, source-folder selection and newly applied mesh registration.
+- Backup size accounting across sessions, excluding exchange files and reading Unicode prefab names.
 
 With the current connector loaded in Max, run `MaxUpdatePreview.ms` and call
 `kcBridgeRunPreviewTests "<report file>"`. Its temporary fixtures verify standalone

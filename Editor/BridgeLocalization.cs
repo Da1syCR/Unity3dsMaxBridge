@@ -17,6 +17,20 @@ namespace Unity3dsMaxBridge.Editor
         internal static string Text(string russian) => !IsRussian && English.TryGetValue(russian, out var english) ? english : russian;
         private static readonly Dictionary<string, string> English = new Dictionary<string, string>(StringComparer.Ordinal)
         {
+            { "Обмен", "Bridge" },
+            { "Резервные копии", "Backups" },
+            { "Резервные копии проекта", "Project backups" },
+            { "Обновить", "Refresh" },
+            { "Подсчёт размера…", "Calculating size..." },
+            { "Всего: ", "Total: " },
+            { " · файлов: ", " - files: " },
+            { "Снимки изменений и исходные копии всех сессий этого проекта.", "Snapshots and initial source copies from all sessions in this project." },
+            { "Не все папки удалось прочитать. Показанный размер может быть неполным.", "Some folders could not be read. The displayed size may be incomplete." },
+            { "Резервных копий пока нет.", "No backups yet." },
+            { " · активная", " - active" },
+            { "Открыть резервные копии", "Open backups" },
+            { "Открыть исходные копии", "Open initial copies" },
+            { "Папка резервных копий больше не существует.", "The backup folder no longer exists." },
             { "Нет ответа от bridge в Max. Выполни Connect_Max.ms в 3ds Max.", "No response from the Max bridge. Run Connect_Max.ms in 3ds Max." },
             { "Ответ Max не распознан. Подготовь подключение и выполни новый Connect_Max.ms.", "Max response is not recognized. Prepare the connection and run the updated Connect_Max.ms." },
             { "Max не отвечает более 8 секунд: он может быть занят, закрыт или окно bridge отключено.", "Max has not responded for over 8 seconds. It may be busy, closed, or the bridge window may be closed." },

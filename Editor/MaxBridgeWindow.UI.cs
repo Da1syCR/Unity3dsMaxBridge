@@ -31,6 +31,7 @@ namespace Unity3dsMaxBridge.Editor
             }
             catch (Exception e) { statusReadError = BridgeLocalization.Text("Не удалось прочитать состояние сессии: ") + e.Message; }
             TrySendPendingMaterials();
+            if (activeTab == 1) RefreshBackupStorage();
             Repaint();
         }
 
@@ -69,6 +70,17 @@ namespace Unity3dsMaxBridge.Editor
             GUILayout.Label(new GUIContent(status, connection.responding ? BridgeLocalization.Text("Ctrl+S в Max: ") + (connection.autoUpdate ? BridgeLocalization.Text("включён") : BridgeLocalization.Text("выключен")) : connection.problem), EditorStyles.miniLabel);
             if (!connection.responding && GUILayout.Button(new GUIContent(BridgeLocalization.Text("Подключить"), connection.problem), EditorStyles.miniButton, GUILayout.Width(85))) Run(PrepareConnection);
             EditorGUILayout.EndHorizontal();
+
+            var nextTab = GUILayout.Toolbar(activeTab, new[] { BridgeLocalization.Text("Обмен"), BridgeLocalization.Text("Резервные копии") });
+            if (nextTab != activeTab) { activeTab = nextTab; scroll = Vector2.zero; if (activeTab == 1) nextBackupScan = 0; }
+            GUILayout.Space(5);
+            if (activeTab == 1)
+            {
+                DrawBackupsGUI();
+                EditorGUILayout.EndVertical();
+                EditorGUILayout.EndScrollView();
+                return;
+            }
 
             EditorGUILayout.BeginVertical(card);
             EditorGUILayout.BeginHorizontal();

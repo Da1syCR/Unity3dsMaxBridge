@@ -174,7 +174,8 @@ public static class BridgeRegressionRunner
             {"English and Russian language switching", LanguageSwitch},
             {"Multi-material drop queue and duplicate filtering", MaterialDropQueue},
             {"Repeated session writes on current storage", SessionWrites},
-            {"Update preview targets and source directory", UpdateTargets} })
+            {"Update preview targets and source directory", UpdateTargets},
+            {"Backup size counts snapshots and originals only", BackupSizes} })
         {
             try { test.Value(); Results.Add("PASS " + test.Key); }
             catch (Exception e) { failed++; Results.Add("FAIL " + test.Key + "\n" + e); }
@@ -211,6 +212,28 @@ public static class BridgeRegressionRunner
             var file = files.Single(f => (string)Get(f, "guid") == (string)Get(binding, "fileGuid"));
             Check(lines.Contains("source|" + Get(binding, "nodeId") + "|" + Get(file, "path")), "Source mesh target is missing");
         }
+    }
+
+    static void BackupSizes()
+    {
+        var root = Path.GetFullPath("BackupSizeFixtures_" + Guid.NewGuid().ToString("N"));
+        var first = Path.Combine(root, "session-a");
+        Directory.CreateDirectory(Path.Combine(first, "Backups", "revision"));
+        Directory.CreateDirectory(Path.Combine(first, "InitialSources", "model"));
+        File.WriteAllBytes(Path.Combine(first, "Backups", "revision", "original.fbx"), new byte[1024]);
+        File.WriteAllBytes(Path.Combine(first, "InitialSources", "model", "source.fbx"), new byte[2048]);
+        File.WriteAllBytes(Path.Combine(first, "ToMax.fbx"), new byte[8192]);
+        File.WriteAllText(Path.Combine(first, "session.json"), "{\"sourcePath\":\"Assets/Модели/Дом.prefab\"}");
+        var second = Path.Combine(root, "session-b", "Backups");
+        Directory.CreateDirectory(second);
+        File.WriteAllBytes(Path.Combine(second, "original.prefab"), new byte[512]);
+        var type = typeof(MaxBridgeWindow).Assembly.GetType("Unity3dsMaxBridge.Editor.BridgeBackupStorage");
+        var report = Call(type, null, "Scan", root);
+        Check((long)Get(report, "totalBytes") == 3584L && (int)Get(report, "totalFiles") == 3, "Backup usage includes exchange files or misses nested backups");
+        var sessions = ((IEnumerable)Get(report, "sessions")).Cast<object>().ToArray();
+        Check(sessions.Length == 2 && sessions.Any(s => (string)Get(s, "name") == "Дом"), "Backup sessions or Unicode prefab names are missing");
+        var empty = Call(type, null, "Scan", Path.Combine(root, "missing"));
+        Check((long)Get(empty, "totalBytes") == 0L && (int)Get(empty, "unreadable") == 0, "Missing storage is not handled as empty");
     }
 
     static void LanguageSwitch()

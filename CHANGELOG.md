@@ -1,5 +1,15 @@
 # Changelog / История изменений
 
+## 0.2.0-beta.3 — 2026-11-09
+
+- Added a Unity Backups tab with folder-opening buttons and sizes for snapshots and initial source copies, grouped by session.
+- Shows combined backup size for the project; background scanning excludes exchange exports/logs and reports incomplete reads.
+- Added size-accounting regression coverage, including nested folders and Unicode prefab names.
+
+- В Unity добавлена вкладка резервных копий: открытие папок, размеры снимков изменений и исходных копий по сессиям.
+- Общий размер проекта считается в фоне, без файлов обмена и журналов; неполный подсчёт отмечается предупреждением.
+- Добавлена проверка размеров, вложенных папок и имён prefab с кириллицей.
+
 ## 0.2.0-beta.2 — 2026-11-09
 
 - Max's Next update panel previews which new meshes create separate FBX files and which target an existing source FBX.

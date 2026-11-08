@@ -12,7 +12,7 @@ Edit static Unity prefab geometry in 3ds Max and bring it back into the original
 2. Click **+ → Install package from git URL** and paste:
 
    ```text
-   https://github.com/Da1syCR/Unity3dsMaxBridge.git#v0.2.0-beta.2
+   https://github.com/Da1syCR/Unity3dsMaxBridge.git#v0.2.0-beta.3
    ```
 
 3. Wait for Unity to install the package and its FBX Exporter dependency.
@@ -22,7 +22,7 @@ Git must be installed and available in PATH for this method. See [Unity's Git in
 
 ### Without Git
 
-Download the [source ZIP](https://github.com/Da1syCR/Unity3dsMaxBridge/archive/refs/tags/v0.2.0-beta.2.zip), extract it to a permanent folder, then choose **Package Manager → + → Install package from disk** and select its `package.json`. Keep the extracted folder while the package is installed.
+Download the [source ZIP](https://github.com/Da1syCR/Unity3dsMaxBridge/archive/refs/tags/v0.2.0-beta.3.zip), extract it to a permanent folder, then choose **Package Manager → + → Install package from disk** and select its `package.json`. Keep the extracted folder while the package is installed.
 
 Use one installation method per project. Remove an earlier Assets copy before installing the UPM package.
 
@@ -75,9 +75,11 @@ Changes outside the bridge may require sending the prefab again. There is one ac
 
 ## Backups and troubleshooting
 
-Use **Diagnostics and files → Open session folder / Open Unity log / Copy diagnostics**. Exchange data and backups live under the current Windows user's local application data, in `Unity3dsMaxBridge/<project-key>`, outside the Unity project. Model-write staging uses a hidden `.Unity3dsMaxBridgeTemp` folder beside the model, so no drive-root permissions are needed.
+The Unity **Backups** tab shows the combined size and file count of backup snapshots and initial source copies across all sessions in the current project. Each session has **Open backups** and **Open initial copies** buttons, with the corresponding size beside each button. Calculation runs in the background; use **Refresh** to rescan. Exchange exports and logs are excluded from the total. A partial-read warning appears if some folders cannot be scanned.
 
-Failed source-file validation triggers rollback. Backups are retained; this beta does not provide a backup-browser or one-click restore UI. Use a version-controlled or backed-up project while evaluating it.
+Use **Diagnostics and files → Open session folder / Open Unity log / Copy diagnostics** for the rest of the exchange data. Exchange data and backups live under the current Windows user's local application data, in `Unity3dsMaxBridge/<project-key>`, outside the Unity project. Model-write staging uses a hidden `.Unity3dsMaxBridgeTemp` folder beside the model, so no drive-root permissions are needed.
+
+Failed source-file validation triggers rollback. Backups are retained; the Backups tab opens their folders, but this beta does not provide one-click restore. Use a version-controlled or backed-up project while evaluating it.
 
 If Max does not respond, reopen its bridge window, close blocking dialogs, or prepare and run the connector again. After updating the Unity package, run the newly generated connector before starting a new session. Save unfinished Max work separately before resending a prefab.
 
