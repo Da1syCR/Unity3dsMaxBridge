@@ -21,6 +21,9 @@ global kcBridgeAssignIds, kcBridgeCollect, kcBridgeImport
 global kcBridgeBeforeSave, kcBridgeAfterSave, kcBridgeLoadUnityMaterials
 global kcBridgeRollout
 global kcBridgeShowWindow, kcBridgeLauncher
+global kcBridgePreviewPlan, kcBridgeRefreshPreview
+global kcBridgePreviewNext = 0
+global kcBridgePreviewText = ""
 global kcBridgeLog
 global kcBridgeHeartbeat, kcBridgeState, kcBridgeStateMessage, kcBridgeOperationSessionId
 kcBridgeState = "ready"
@@ -112,6 +115,110 @@ fn kcBridgeCollect = (
     for node in known where isValidNode node do kcBridgeAddTree node
     kcBridgeNodes = for node in kcBridgeNodes where isValidNode node collect node
     kcBridgeAssignIds()
+)
+
+-- Read-only preview: use the same collection/parent rules as export and Unity apply.
+-- Do not call Collect here: polling must not tag nodes or dirty the artist's scene.
+fn kcBridgePreviewPlan = (
+    if kcBridgeSessionDirectory == "" do return #(false, "Send a prefab to start a session.", #(), false)
+    local path = kcBridgeSessionDirectory + "/UpdateTargets.txt"
+    if not doesFileExist path do return #(false, "Preview unavailable: send the prefab again.", #(), false)
+    local stream = undefined
+    try (
+        stream = openFile path mode:"r" encoding:#utf8
+        if stream == undefined do throw "Cannot read update targets."
+        if (readLine stream) != "UMB_UPDATE_TARGETS_1" do throw "Unsupported update targets."
+        local directory = ""
+        local known = #(), sourceIds = #(), sourcePaths = #()
+        local protectedMeshes = false, complete = false
+        while not eof stream do (
+            local line = readLine stream
+            if line == "UMB_END" then complete = true
+            else (
+                local parts = filterString line "|"
+                if parts.count < 2 do throw "Incomplete update targets."
+                case parts[1] of (
+                    "new-directory": (directory = parts[2])
+                    "known": (appendIfUnique known parts[2])
+                    "source": (
+                        if parts.count != 3 do throw "Incomplete source target."
+                        append sourceIds parts[2]; append sourcePaths parts[3]
+                    )
+                    "protected": (protectedMeshes = parts[2] == "true")
+                )
+            )
+        )
+        close stream; stream = undefined
+        if not complete or directory == "" do throw "Incomplete update targets."
+
+        local nodes = for node in kcBridgeNodes where isValidNode node collect node
+        for node in objects where (getUserProp node "KCB_Session") == kcBridgeSessionId or ((superClassOf node) == GeometryClass and (getUserProp node "KCB_Session") == undefined and (findItem kcBridgeSceneBaseline (getHandleByAnim node)) == 0) do appendIfUnique nodes node
+        local cursor = 1
+        while cursor <= nodes.count do (
+            for child in nodes[cursor].children do appendIfUnique nodes child
+            cursor += 1
+        )
+        -- Predict AssignIds without changing user properties, including duplicated IDs.
+        local used = #(), effectiveIds = #()
+        for node in nodes do (
+            local id = getUserProp node "KCB_NodeId"
+            local usable = (getUserProp node "KCB_Transport") != true and id != undefined and (getUserProp node "KCB_Session") == kcBridgeSessionId and (findItem used id) == 0
+            append effectiveIds (if usable then id else undefined)
+            if usable do append used id
+        )
+        local changes = #()
+        for i = 1 to nodes.count where (superClassOf nodes[i]) == GeometryClass and (getUserProp nodes[i] "KCB_Transport") != true and (effectiveIds[i] == undefined or (findItem known effectiveIds[i]) == 0) do (
+            local target = ""
+            local parent = nodes[i].parent
+            while isValidNode parent and target == "" do (
+                local index = findItem nodes parent
+                if index > 0 and effectiveIds[index] != undefined do (
+                    local source = findItem sourceIds effectiveIds[index]
+                    if source > 0 do target = sourcePaths[source]
+                )
+                parent = parent.parent
+            )
+            append changes #(nodes[i], target)
+        )
+        #(true, directory, changes, protectedMeshes)
+    ) catch (
+        if stream != undefined do try (close stream) catch ()
+        #(false, "Preview unavailable: update Unity and resend.", #(), false)
+    )
+)
+
+fn kcBridgeRefreshPreview = (
+    if kcBridgeRollout == undefined or not kcBridgeRollout.isDisplayed do return false
+    local plan = kcBridgePreviewPlan()
+    local rows = #(), separate = 0, linked = 0
+    local summary = plan[2]
+    local note = "Send or resend a prefab from Unity to\npreview new mesh file destinations."
+    if plan[1] do (
+        for change in plan[3] do (
+            if change[2] == "" then (
+                separate += 1
+                append rows (change[1].name + " -> NEW FBX in " + plan[2])
+            ) else (
+                linked += 1
+                append rows (change[1].name + " -> ADD TO " + change[2])
+            )
+        )
+        summary = if rows.count == 0 then "No new meshes detected." else ((separate as string) + " new FBX | " + (linked as string) + " add to source FBX")
+        note = "Existing FBX edits update the source file.\nNew file names are chosen by Unity."
+        if rows.count > 0 do note = "Unity chooses new file names. Linked meshes\nrequire valid Unity references; unlink them\nfor a separate FBX."
+        if plan[4] do note += "\nProtected edits may create a companion FBX."
+    )
+    if rows.count == 0 do rows = if plan[1] then #("No additional mesh files planned.") else #("Preview is not available.")
+    local text = summary + note + (rows as string)
+    if text != kcBridgePreviewText do (
+        local details = ""
+        for row in rows do details += row + "\r\n"
+        kcBridgeRollout.previewSummary.text = summary
+        kcBridgeRollout.updatePlan.text = details
+        kcBridgeRollout.previewNote.text = note
+        kcBridgePreviewText = text
+    )
+    true
 )
 fn kcBridgeImport folder = (
     kcBridgeLog "import.start" folder
@@ -303,6 +410,11 @@ try (destroyDialog kcBridgeRollout) catch ()
 rollout kcBridgeRollout "Unity3dsMaxBridge" width:330 (
     label status "Waiting for a prefab from Unity" width:310
     button addSelected "Add selected objects" width:310
+    group "Next update" (
+        label previewSummary "Preparing preview..." width:300
+        edittext updatePlan "" text:"" readOnly:true multiLine:true height:68 width:300
+        label previewNote "" width:300 height:48
+    )
     listbox unityMaterials "Unity materials" items:#() height:5 width:310
     button assignUnityMaterial "Assign selected Unity material" width:310 tooltip:"Assign to selected objects. Ctrl+Z to undo."
     checkbox autoUpdate "Update Unity on Ctrl+S" checked:kcBridgeAutoUpdate width:310
@@ -311,6 +423,8 @@ rollout kcBridgeRollout "Unity3dsMaxBridge" width:330 (
     timer poll interval:800 active:true
     on autoUpdate changed enabled do (kcBridgeAutoUpdate = enabled; kcBridgeLog "auto-update" (enabled as string))
     on kcBridgeRollout open do (
+        kcBridgePreviewText = ""
+        kcBridgeRefreshPreview()
         kcBridgeHeartbeat()
         kcBridgeLoadUnityMaterials()
         unityMaterials.items = kcBridgeUnityMaterialLabels
@@ -320,6 +434,7 @@ rollout kcBridgeRollout "Unity3dsMaxBridge" width:330 (
             for node in (selection as array) do kcBridgeAddTree node
             kcBridgeAssignIds()
             status.text = "Objects in session: " + kcBridgeNodes.count as string
+            kcBridgeRefreshPreview()
         )
     )
     on sendBack pressed do (
@@ -335,6 +450,10 @@ rollout kcBridgeRollout "Unity3dsMaxBridge" width:330 (
     )
     on poll tick do (
         kcBridgeHeartbeat()
+        if (timeStamp()) >= kcBridgePreviewNext do (
+            kcBridgePreviewNext = (timeStamp()) + 1500
+            kcBridgeRefreshPreview()
+        )
         if kcBridgeSessionDirectory != "" do (
             local materialRequest = kcBridgeSessionDirectory + "/materials.request"
             if doesFileExist materialRequest do (

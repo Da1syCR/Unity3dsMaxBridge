@@ -12,7 +12,7 @@ Edit static Unity prefab geometry in 3ds Max and bring it back into the original
 2. Click **+ → Install package from git URL** and paste:
 
    ```text
-   https://github.com/Da1syCR/Unity3dsMaxBridge.git#v0.2.0-beta.1
+   https://github.com/Da1syCR/Unity3dsMaxBridge.git#v0.2.0-beta.2
    ```
 
 3. Wait for Unity to install the package and its FBX Exporter dependency.
@@ -22,7 +22,7 @@ Git must be installed and available in PATH for this method. See [Unity's Git in
 
 ### Without Git
 
-Download the [source ZIP](https://github.com/Da1syCR/Unity3dsMaxBridge/archive/refs/tags/v0.2.0-beta.1.zip), extract it to a permanent folder, then choose **Package Manager → + → Install package from disk** and select its `package.json`. Keep the extracted folder while the package is installed.
+Download the [source ZIP](https://github.com/Da1syCR/Unity3dsMaxBridge/archive/refs/tags/v0.2.0-beta.2.zip), extract it to a permanent folder, then choose **Package Manager → + → Install package from disk** and select its `package.json`. Keep the extracted folder while the package is installed.
 
 Use one installation method per project. Remove an earlier Assets copy before installing the UPM package.
 
@@ -48,6 +48,15 @@ Drop one or several existing Unity materials into **Materials**. The bridge send
 Unity offers **English / Русский** in the window header and remembers your choice. Max stays in English.
 
 ## Geometry and materials
+
+### Before the next update
+
+Max's **Next update** block refreshes automatically as you add or link meshes:
+
+- **NEW FBX in ...**: Unity will create a separate FBX in the displayed project folder.
+- **ADD TO ...**: the mesh is linked under an existing model and targets that source FBX. Unity validates existing references before accepting the addition; unlink the mesh to request a separate FBX instead.
+
+The list previews new meshes, not every geometry edit. Unity chooses the final unique file names. Protected non-FBX Unity meshes may also create a companion FBX when edited. An unavailable preview asks you to update the Unity package and resend the prefab rather than guessing a destination.
 
 - Existing geometry updates its original FBX. Other prefabs using that FBX also see the change.
 - A new standalone Max mesh gets a separate FBX beside the first source model, or beside the prefab when needed.

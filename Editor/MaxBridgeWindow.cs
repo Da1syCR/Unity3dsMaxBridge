@@ -495,6 +495,7 @@ namespace Unity3dsMaxBridge.Editor
             {
                 File.WriteAllText(temporary, JsonUtility.ToJson(value, true));
                 CommitExchangeFile(temporary, path);
+                WriteUpdateTargets(value);
             }
             finally { if (File.Exists(temporary)) File.Delete(temporary); }
         }

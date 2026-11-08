@@ -132,6 +132,9 @@ public static class BridgeRegressionRunner
         Apply(session);
         var binding = ((IEnumerable)Get(session,"fbxBindings")).Cast<object>().Single(b => (string)Get(b,"nodeId") == id);
         var addedPath = AssetDatabase.GUIDToAssetPath((string)Get(binding,"fileGuid"));
+        Call(typeof(MaxBridgeWindow), null, "Save", session);
+        var targets = File.ReadAllLines(Path.Combine(Dir(session), "UpdateTargets.txt"));
+        Check(targets.Contains("known|" + id) && targets.Contains("source|" + id + "|" + addedPath), "Applied mesh is still unknown to the Max update preview");
         Check(child ? addedPath == originalFiles[0] : !originalFiles.Contains(addedPath), "Wrong destination FBX");
         Check(Path.GetDirectoryName(addedPath) == Path.GetDirectoryName(originalFiles[0]), "Wrong destination directory");
         Check(AssetDatabase.LoadAssetAtPath<GameObject>(path).GetComponentsInChildren<MeshFilter>().Length == 3, "Missing added prefab mesh");
@@ -170,7 +173,8 @@ public static class BridgeRegressionRunner
             {"Standalone package and generated connector", ConnectionSetup},
             {"English and Russian language switching", LanguageSwitch},
             {"Multi-material drop queue and duplicate filtering", MaterialDropQueue},
-            {"Repeated session writes on current storage", SessionWrites} })
+            {"Repeated session writes on current storage", SessionWrites},
+            {"Update preview targets and source directory", UpdateTargets} })
         {
             try { test.Value(); Results.Add("PASS " + test.Key); }
             catch (Exception e) { failed++; Results.Add("FAIL " + test.Key + "\n" + e); }
@@ -192,6 +196,21 @@ public static class BridgeRegressionRunner
         Check(text.Contains("macroScript Unity3dsMaxBridge"), "Persistent Max action is missing");
         Check(File.ReadAllBytes(script).Take(3).SequenceEqual(new byte[] { 239, 187, 191 }), "Unicode connector is missing UTF-8 BOM");
         Check(script.StartsWith(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Unity3dsMaxBridge"), StringComparison.OrdinalIgnoreCase), "Connector is not stored in the current user's folder");
+    }
+
+    static void UpdateTargets()
+    {
+        var path = Fixture("PreviewTargets", multiple: true);
+        var session = Send(AssetDatabase.LoadAssetAtPath<GameObject>(path));
+        var lines = File.ReadAllLines(Path.Combine(Dir(session), "UpdateTargets.txt"));
+        Check(lines.First() == "UMB_UPDATE_TARGETS_1" && lines.Last() == "UMB_END", "Preview registry is incomplete");
+        var files = ((IEnumerable)Get(session, "fbxFiles")).Cast<object>().ToArray();
+        Check(lines.Contains("new-directory|" + Path.GetDirectoryName((string)Get(files[0], "path")).Replace('\\', '/')), "New mesh directory does not match Unity apply");
+        foreach (var binding in ((IEnumerable)Get(session, "fbxBindings")).Cast<object>())
+        {
+            var file = files.Single(f => (string)Get(f, "guid") == (string)Get(binding, "fileGuid"));
+            Check(lines.Contains("source|" + Get(binding, "nodeId") + "|" + Get(file, "path")), "Source mesh target is missing");
+        }
     }
 
     static void LanguageSwitch()

@@ -30,6 +30,13 @@ Checks:
 - English/Russian Unity language selection, including error messages.
 - Multiple material drops, duplicate filtering and queuing without a Max session.
 - Repeated session-file writes and temporary-file cleanup.
+- Next-update target registry, source-folder selection and newly applied mesh registration.
+
+With the current connector loaded in Max, run `MaxUpdatePreview.ms` and call
+`kcBridgeRunPreviewTests "<report file>"`. Its temporary fixtures verify standalone
+and linked additions, duplicate IDs, children of new meshes, registry refresh,
+and incomplete metadata. The test restores the prior session, selection and
+scene dirty flag and does not reset or export the artist's scene.
 
 For a real Max roundtrip, run `BridgeRegressionRunner.PrepareMax`, read the
 session directory in `<test project>/max-session.json`, and import it with the

@@ -1,5 +1,15 @@
 # Changelog / История изменений
 
+## 0.2.0-beta.2 — 2026-11-09
+
+- Max's Next update panel previews which new meshes create separate FBX files and which target an existing source FBX.
+- Preview follows Unity's parent/source mapping, shows the destination folder, and warns about reference validation and protected Unity meshes.
+- Preview is read-only and refreshes after Unity registers an applied mesh. Added Unity and Max regression coverage.
+
+- Панель Next update в Max показывает новые отдельные FBX и добавления в исходный FBX.
+- Предпросмотр учитывает привязку к модели, показывает папку назначения и поясняет проверки ссылок и защищённые меши Unity.
+- Просмотр не меняет сцену и обновляется после регистрации меша в Unity. Добавлены проверки Unity и Max.
+
 ## 0.2.0-beta.1 — 2026-11-09
 
 First public beta of the standalone MIT-licensed package.
