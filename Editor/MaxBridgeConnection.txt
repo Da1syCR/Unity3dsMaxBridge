@@ -1,0 +1,411 @@
+-- Project-specific companion. Run once in the user's existing Max session.
+-- Import merges geometry into the scene; it never resets or saves that scene.
+global kcBridgeDirectory = @"{{BRIDGE_DIRECTORY}}"
+global kcBridgeSessionDirectory
+global kcBridgeNodes
+global kcBridgeSessionId
+global kcBridgeSceneBaseline
+global kcBridgeBusy
+global kcBridgeAutoUpdate
+if kcBridgeAutoUpdate == undefined do kcBridgeAutoUpdate = false
+if kcBridgeSessionDirectory == undefined do kcBridgeSessionDirectory = ""
+if kcBridgeNodes == undefined do kcBridgeNodes = #()
+if kcBridgeSessionId == undefined do kcBridgeSessionId = ""
+if kcBridgeSceneBaseline == undefined do kcBridgeSceneBaseline = #()
+if kcBridgeBusy == undefined do kcBridgeBusy = false
+global kcBridgeExport
+-- fileIn can run inside a tool's local scope. Explicit globals ensure a
+-- reconnect replaces the live callbacks and palette loader in that case.
+global kcBridgeToken, kcBridgeDisplay, kcBridgeGuid, kcBridgeAddTree
+global kcBridgeAssignIds, kcBridgeCollect, kcBridgeImport
+global kcBridgeBeforeSave, kcBridgeAfterSave, kcBridgeLoadUnityMaterials
+global kcBridgeRollout
+global kcBridgeShowWindow, kcBridgeLauncher
+global kcBridgeLog
+global kcBridgeHeartbeat, kcBridgeState, kcBridgeStateMessage, kcBridgeOperationSessionId
+kcBridgeState = "ready"
+kcBridgeStateMessage = "Bridge connected"
+kcBridgeOperationSessionId = kcBridgeSessionId
+fn kcBridgeHeartbeat = (
+    try (
+        makeDir kcBridgeDirectory all:true
+        local path = kcBridgeDirectory + "/max.heartbeat"
+        local temporary = path + ".tmp"
+        local stream = createFile temporary encoding:#utf8
+        local message = substituteString (substituteString (kcBridgeStateMessage as string) "\n" " ") "\r" " "
+        format "KCB_HEARTBEAT_1\n%\n%\n%\n%\n%\nKCB_END\n" kcBridgeSessionId kcBridgeState message kcBridgeAutoUpdate kcBridgeOperationSessionId to:stream
+        close stream
+        local io = dotNetClass "System.IO.File"
+        if doesFileExist path then (
+            -- Replace can be denied in encrypted Windows folders. The reader
+            -- validates the end marker before accepting a copied response.
+            try (io.Replace temporary path (path + ".previous"))
+            catch (io.Copy temporary path true; io.Delete temporary)
+        ) else io.Move temporary path
+    ) catch ()
+)
+fn kcBridgeLog eventName message = (
+    case eventName of (
+        "import.start": (kcBridgeState = "importing"; kcBridgeOperationSessionId = filenameFromPath message)
+        "import.success": (kcBridgeState = "ready")
+        "export.start": (kcBridgeState = "exporting"; kcBridgeOperationSessionId = kcBridgeSessionId)
+        "export.success": (kcBridgeState = "exported")
+        "export.error": (kcBridgeState = "error")
+        "export.rejected": (kcBridgeState = "error")
+        "update.error": (kcBridgeState = "error")
+        "import.error": (kcBridgeState = "error")
+    )
+    if eventName != "auto-update" do kcBridgeStateMessage = message as string
+    kcBridgeHeartbeat()
+    try (
+        local folder = if kcBridgeSessionDirectory == "" then kcBridgeDirectory else kcBridgeSessionDirectory
+        local path = folder + "/max-bridge.log"
+        if doesFileExist path and (getFileSize path) > 2097152 do (
+            if doesFileExist (path + ".1") do deleteFile (path + ".1")
+            renameFile path (path + ".1")
+        )
+        local stream = openFile path mode:"a" encoding:#utf8
+        if stream != undefined do (
+            format "% | % | %\n" localTime eventName message to:stream
+            close stream
+        )
+    ) catch ()
+)
+fn kcBridgeToken nodeName = (
+    local markerIndex = findString nodeName "__KCB_"
+    if markerIndex == undefined then undefined else substring nodeName (markerIndex + 6) 32
+)
+fn kcBridgeDisplay nodeName = (
+    local markerIndex = findString nodeName "__KCB_"
+    if markerIndex == undefined then nodeName else substring nodeName 1 (markerIndex - 1)
+)
+fn kcBridgeGuid = (
+    local guidClass = dotNetClass "System.Guid"
+    local value = guidClass.NewGuid()
+    (value.ToString "N") as string
+)
+fn kcBridgeAddTree node = (
+    if isValidNode node do (
+        appendIfUnique kcBridgeNodes node
+        for child in node.children do kcBridgeAddTree child
+    )
+)
+fn kcBridgeAssignIds = (
+    local used = #()
+    for node in kcBridgeNodes where isValidNode node and (getUserProp node "KCB_Transport") != true do (
+        local id = getUserProp node "KCB_NodeId"
+        local owner = getUserProp node "KCB_Session"
+        if id == undefined or owner != kcBridgeSessionId or (findItem used id) != 0 do (
+            id = kcBridgeGuid()
+            setUserProp node "KCB_NodeId" id
+            setUserProp node "KCB_Session" kcBridgeSessionId
+        )
+        append used id
+    )
+)
+fn kcBridgeCollect = (
+    -- Include geometry created after this session was imported, including
+    -- standalone meshes. Never collect pre-existing scene objects or another session.
+    for node in objects where (superClassOf node) == GeometryClass and (getUserProp node "KCB_Session") == undefined and (findItem kcBridgeSceneBaseline (getHandleByAnim node)) == 0 do kcBridgeAddTree node
+    for node in objects where (getUserProp node "KCB_Session") == kcBridgeSessionId do kcBridgeAddTree node
+    local known = kcBridgeNodes as array
+    for node in known where isValidNode node do kcBridgeAddTree node
+    kcBridgeNodes = for node in kcBridgeNodes where isValidNode node collect node
+    kcBridgeAssignIds()
+)
+fn kcBridgeImport folder = (
+    kcBridgeLog "import.start" folder
+    local input = folder + "/ToMax.fbx"
+    if not doesFileExist input do throw "ToMax.fbx is missing. Send the prefab from Unity."
+    if folder == kcBridgeSessionDirectory and kcBridgeNodes.count > 0 do throw "This session is already imported."
+    local previous = objects as array
+    kcBridgeSceneBaseline = for node in previous collect getHandleByAnim node
+    local oldSelection = selection as array
+    pluginManager.loadClass FBXIMP
+    FBXImporterSetParam "PushSettings"
+    local failure = undefined
+    try (
+        FBXImporterSetParam "ResetImport"
+        FBXImporterSetParam "Mode" #create
+        FBXImporterSetParam "Animation" false
+        importFile input #noPrompt using:FBXIMP
+    ) catch (failure = getCurrentException())
+    FBXImporterSetParam "PopSettings"
+    if failure != undefined do throw failure
+    kcBridgeSessionDirectory = folder
+    kcBridgeSessionId = filenameFromPath folder
+    kcBridgeNodes = for node in objects where (findItem previous node) == 0 collect node
+    -- Repeated prefab instances must remain independently editable in Max.
+    -- Unity's shared FBX geometry is reconciled during write-back.
+    local geometryNodes = for node in kcBridgeNodes where (superClassOf node) == GeometryClass collect node
+    if geometryNodes.count > 0 do InstanceMgr.MakeObjectsUnique &geometryNodes #individual
+    for node in kcBridgeNodes do (
+        local id = kcBridgeToken node.name
+        if id != undefined do (
+            setUserProp node "KCB_NodeId" id
+            setUserProp node "KCB_Session" kcBridgeSessionId
+            node.name = kcBridgeDisplay node.name
+        )
+        if id == undefined do setUserProp node "KCB_Transport" true
+    )
+    selectionSets["KCB_" + kcBridgeSessionId] = kcBridgeNodes
+    select oldSelection
+    kcBridgeExport baseline:true
+    local protectedFile = folder + "/ProtectedMeshes.txt"
+    if doesFileExist protectedFile do (
+        local protectedStream = openFile protectedFile mode:"r"
+        if protectedStream != undefined do (
+            while not eof protectedStream do (
+                local protectedId = readLine protectedStream
+                for node in kcBridgeNodes where (getUserProp node "KCB_NodeId") == protectedId do (
+                    node.showFrozenInGray = false
+                    node.isFrozen = true
+                )
+            )
+            close protectedStream
+        )
+    )
+    kcBridgeLog "import.success" ("nodes=" + kcBridgeNodes.count as string)
+    kcBridgeNodes.count
+)
+fn kcBridgeExport baseline:false force:false = (
+    if kcBridgeBusy do return false
+    if kcBridgeSessionDirectory == "" do throw "Send a prefab from Unity first."
+    kcBridgeLog "export.start" ("baseline=" + baseline as string + "; manual=" + force as string)
+    kcBridgeCollect()
+    local liveGeometry = for node in kcBridgeNodes where isValidNode node and (superClassOf node) == GeometryClass collect node
+    if liveGeometry.count == 0 do (
+        kcBridgeLog "export.rejected" "No live geometry. Previous export retained."
+        throw "No bridge geometry in this scene. Send the prefab from Unity again. Previous export was retained."
+    )
+    kcBridgeBusy = true
+    local wasDirty = getSaveRequired()
+    local oldSelection = selection as array
+    local oldNames = for node in kcBridgeNodes collect node.name
+    local failure = undefined
+    local settingsPushed = false
+    try (
+        pluginManager.loadClass FBXEXP
+        FBXExporterSetParam "PushSettings"
+        settingsPushed = true
+        for i = 1 to kcBridgeNodes.count do (
+            local node = kcBridgeNodes[i]
+            if (getUserProp node "KCB_Transport") != true do node.name = oldNames[i] + "__KCB_" + (getUserProp node "KCB_NodeId")
+        )
+        select kcBridgeNodes
+        FBXExporterSetParam "ResetExport"
+        FBXExporterSetParam "Animation" false
+        FBXExporterSetParam "Cameras" false
+        FBXExporterSetParam "Lights" false
+        FBXExporterSetParam "UpAxis" "Y"
+        FBXExporterSetParam "ConvertUnit" "cm"
+        FBXExporterSetParam "ScaleFactor" 1.0
+        FBXExporterSetParam "Triangulate" true
+        FBXExporterSetParam "EmbedTextures" false
+        FBXExporterSetParam "ASCII" false
+        local temporary = kcBridgeSessionDirectory + "/Edited_pending.fbx"
+        exportFile temporary #noPrompt selectedOnly:true using:FBXEXP
+        local destination = kcBridgeSessionDirectory + (if baseline then "/MaxBaseline.fbx" else "/Edited.fbx")
+        if not baseline and doesFileExist destination do (
+            local previous = kcBridgeSessionDirectory + "/Edited.previous.fbx"
+            if doesFileExist previous do deleteFile previous
+            if not copyFile destination previous do throw "Cannot back up previous export. Export cancelled."
+        )
+        if doesFileExist destination do deleteFile destination
+        if not renameFile temporary destination do throw "Cannot replace Edited.fbx. Try Update now again."
+        if not baseline do (
+            if force do (local manual = createFile (kcBridgeSessionDirectory + "/apply.request"); close manual)
+            local ready = createFile (kcBridgeSessionDirectory + "/Edited.ready")
+            format "%" (kcBridgeGuid()) to:ready
+            close ready
+        )
+    ) catch (failure = getCurrentException())
+    try (
+        if settingsPushed do FBXExporterSetParam "PopSettings"
+        for i = 1 to kcBridgeNodes.count where isValidNode kcBridgeNodes[i] do kcBridgeNodes[i].name = oldNames[i]
+        select oldSelection
+        setSaveRequired wasDirty
+    ) catch (if failure == undefined do failure = getCurrentException())
+    kcBridgeBusy = false
+    if failure != undefined then (kcBridgeLog "export.error" failure; throw failure)
+    else kcBridgeLog "export.success" ("nodes=" + kcBridgeNodes.count as string)
+)
+fn kcBridgeBeforeSave = (
+    if kcBridgeAutoUpdate and kcBridgeSessionDirectory != "" and not kcBridgeBusy do kcBridgeCollect()
+)
+fn kcBridgeAfterSave = (
+    if kcBridgeAutoUpdate and kcBridgeSessionDirectory != "" and not kcBridgeBusy do (
+        try (kcBridgeExport()) catch (kcBridgeLog "update.error" (getCurrentException() as string); format "Unity3dsMaxBridge: %\n" (getCurrentException()))
+    )
+)
+global kcBridgeUnityMaterials = #()
+global kcBridgeUnityMaterialLabels = #()
+fn kcBridgeLoadUnityMaterials = (
+    local previousMaterials = kcBridgeUnityMaterials
+    kcBridgeUnityMaterials = #(); kcBridgeUnityMaterialLabels = #()
+    local path = kcBridgeSessionDirectory + "/UnityMaterials.txt"
+    if not doesFileExist path do return()
+    local stream = openFile path mode:"r" encoding:#utf8
+    if stream == undefined do return()
+    while not eof stream do (
+        local parts = filterString (readLine stream) "|"
+        if parts.count >= 2 do (
+            local materialName = parts[2] + "__KCM_" + parts[1]
+            local material = undefined
+            for existing in previousMaterials where existing.name == materialName do material = existing
+            for existing in sceneMaterials where existing.name == materialName do material = existing
+            if material == undefined do material = standardMaterial name:materialName
+            if parts.count >= 12 and (classOf material) == Standardmaterial do (
+                material.diffuse = color ((parts[4] as float) * 255) ((parts[5] as float) * 255) ((parts[6] as float) * 255)
+                material.diffuseMap = undefined
+                material.diffuseMapEnable = false
+                if parts[3] != "-" and doesFileExist parts[3] do (
+                    local bitmapMap = bitmaptexture filename:parts[3]
+                    bitmapMap.coords.U_Tiling = parts[7] as float
+                    bitmapMap.coords.V_Tiling = parts[8] as float
+                    bitmapMap.coords.U_Offset = parts[9] as float
+                    bitmapMap.coords.V_Offset = parts[10] as float
+                    material.diffuseMap = bitmapMap
+                    material.diffuseMapEnable = true
+                    showTextureMap material bitmapMap on
+                )
+                if parts[11] != "-" and doesFileExist parts[11] do (
+                    local normalMap = Normal_Bump()
+                    normalMap.normal_map = bitmaptexture filename:parts[11]
+                    normalMap.normal_map.coords.U_Tiling = parts[7] as float
+                    normalMap.normal_map.coords.V_Tiling = parts[8] as float
+                    normalMap.normal_map.coords.U_Offset = parts[9] as float
+                    normalMap.normal_map.coords.V_Offset = parts[10] as float
+                    material.bumpMap = normalMap
+                    material.bumpMapEnable = true
+                    material.bumpMapAmount = 100
+                )
+                if parts[12] != "-" and doesFileExist parts[12] do (
+                    material.selfIllumMap = bitmaptexture filename:parts[12]
+                    material.selfIllumMap.coords.U_Tiling = parts[7] as float
+                    material.selfIllumMap.coords.V_Tiling = parts[8] as float
+                    material.selfIllumMap.coords.U_Offset = parts[9] as float
+                    material.selfIllumMap.coords.V_Offset = parts[10] as float
+                    material.selfIllumMapEnable = true
+                )
+            )
+            append kcBridgeUnityMaterials material
+            append kcBridgeUnityMaterialLabels parts[2]
+        )
+    )
+    close stream
+)
+
+callbacks.removeScripts id:#Unity3dsMaxBridgeAuto
+callbacks.addScript #filePreSave "kcBridgeBeforeSave()" id:#Unity3dsMaxBridgeAuto persistent:false
+callbacks.addScript #filePostSave "kcBridgeAfterSave()" id:#Unity3dsMaxBridgeAuto persistent:false
+try (destroyDialog kcBridgeRollout) catch ()
+rollout kcBridgeRollout "Unity3dsMaxBridge" width:330 (
+    label status "Waiting for a prefab from Unity" width:310
+    button addSelected "Add selected objects" width:310
+    listbox unityMaterials "Unity materials" items:#() height:5 width:310
+    button assignUnityMaterial "Assign selected Unity material" width:310 tooltip:"Assign to selected objects. Ctrl+Z to undo."
+    checkbox autoUpdate "Update Unity on Ctrl+S" checked:kcBridgeAutoUpdate width:310
+    button sendBack "Update now" width:310
+    label saveInfo "Auto off: save freely, then press Update now" width:310
+    timer poll interval:800 active:true
+    on autoUpdate changed enabled do (kcBridgeAutoUpdate = enabled; kcBridgeLog "auto-update" (enabled as string))
+    on kcBridgeRollout open do (
+        kcBridgeHeartbeat()
+        kcBridgeLoadUnityMaterials()
+        unityMaterials.items = kcBridgeUnityMaterialLabels
+    )
+    on addSelected pressed do (
+        if kcBridgeSessionDirectory == "" then messageBox "Send a prefab from Unity first." else (
+            for node in (selection as array) do kcBridgeAddTree node
+            kcBridgeAssignIds()
+            status.text = "Objects in session: " + kcBridgeNodes.count as string
+        )
+    )
+    on sendBack pressed do (
+        try (kcBridgeExport force:true; status.text = "Exported. Unity updates automatically.")
+        catch (kcBridgeLog "update.error" (getCurrentException() as string); messageBox (getCurrentException() as string) title:"Unity3dsMaxBridge")
+    )
+    on assignUnityMaterial pressed do (
+        local index = unityMaterials.selection
+        if index < 1 then messageBox "Choose a material from the Unity materials list."
+        else undo "Assign Unity material" on (
+            for node in (selection as array) where (superClassOf node) == GeometryClass do node.material = kcBridgeUnityMaterials[index]
+        )
+    )
+    on poll tick do (
+        kcBridgeHeartbeat()
+        if kcBridgeSessionDirectory != "" do (
+            local materialRequest = kcBridgeSessionDirectory + "/materials.request"
+            if doesFileExist materialRequest do (
+                try (
+                    kcBridgeLoadUnityMaterials()
+                    unityMaterials.items = kcBridgeUnityMaterialLabels
+                    deleteFile materialRequest
+                ) catch (status.text = getCurrentException() as string; kcBridgeLog "update.error" status.text)
+            )
+            local syncRequest = kcBridgeSessionDirectory + "/sync.request"
+            if doesFileExist syncRequest do (
+                deleteFile syncRequest
+                try (kcBridgeExport force:true; status.text = "Exported. Unity updates automatically.") catch (status.text = getCurrentException() as string; kcBridgeLog "update.error" status.text)
+            )
+            local syncStatus = kcBridgeSessionDirectory + "/sync.status"
+            if doesFileExist syncStatus do (
+                local result = openFile syncStatus mode:"r" encoding:#utf8
+                if result != undefined do (status.text = readLine result; close result)
+            )
+        )
+        local request = kcBridgeDirectory + "/open.request"
+        if doesFileExist request do (
+            local stream = openFile request mode:"r"
+            if stream != undefined do (
+                local folder = readLine stream
+                close stream
+                deleteFile request
+                try (
+                    local count = kcBridgeImport folder
+                    kcBridgeLoadUnityMaterials()
+                    unityMaterials.items = kcBridgeUnityMaterialLabels
+                    status.text = "Imported objects: " + count as string
+                ) catch (status.text = getCurrentException() as string; kcBridgeLog "import.error" status.text)
+            )
+        )
+    )
+)
+fn kcBridgeShowWindow = (
+    if kcBridgeRollout.isDisplayed then (
+        kcBridgeRollout.visible = true
+        setFocus kcBridgeRollout.sendBack
+    ) else createDialog kcBridgeRollout
+)
+
+-- The macro is saved by Max in usermacros and can be assigned to any toolbar/hotkey.
+-- Store the last connector separately so the action also works after restarting Max.
+setINISetting ((getDir #userScripts) + "/Unity3dsMaxBridge.ini") "Connection" "Script" (kcBridgeDirectory + "/Connect_Max.ms")
+macroScript Unity3dsMaxBridge
+category:"Unity3dsMaxBridge"
+toolTip:"Unity3dsMaxBridge"
+buttonText:"Unity Bridge"
+(
+    global kcBridgeShowWindow
+    on execute do (
+        if kcBridgeShowWindow != undefined then kcBridgeShowWindow()
+        else (
+            local connector = getINISetting ((getDir #userScripts) + "/Unity3dsMaxBridge.ini") "Connection" "Script"
+            if connector != "" and doesFileExist connector then fileIn connector
+            else messageBox "Prepare the Max connection in Unity and run Connect_Max.ms once." title:"Unity3dsMaxBridge"
+        )
+    )
+)
+
+-- A compact dockable launcher keeps the window one click away after closing it.
+try (cui.UnRegisterDialogBar kcBridgeLauncher) catch ()
+try (destroyDialog kcBridgeLauncher) catch ()
+rollout kcBridgeLauncher "Unity3dsMaxBridge" width:118 height:30 (
+    button openBridge "Unity Bridge" pos:[4,3] width:108 height:24 toolTip:"Unity3dsMaxBridge"
+    on openBridge pressed do kcBridgeShowWindow()
+)
+createDialog kcBridgeLauncher style:#(#style_titlebar, #style_border, #style_sysmenu, #style_toolwindow)
+cui.RegisterDialogBar kcBridgeLauncher style:#(#cui_dock_all, #cui_floatable, #cui_handles)
+cui.DockDialogBar kcBridgeLauncher #cui_dock_top
+kcBridgeShowWindow()

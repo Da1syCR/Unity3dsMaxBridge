@@ -1,0 +1,27 @@
+# Unity-generated files if this package is used in a development project.
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+[Bb]uild/
+[Bb]uilds/
+.vs/
+.idea/
+*.csproj
+*.sln
+*.slnx
+*.user
+*.pidb
+*.pdb
+*.dll
+*.unitypackage
+*.tgz
+.DS_Store
+Thumbs.db
+.Unity3dsMaxBridgeTemp/
+.env
+.env.*
+*.log
+__pycache__/
+# Keep Unity .meta files under version control.

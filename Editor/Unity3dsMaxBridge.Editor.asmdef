@@ -1,0 +1,7 @@
+{
+  "name": "Unity3dsMaxBridge.Editor",
+  "rootNamespace": "Unity3dsMaxBridge.Editor",
+  "references": ["Unity.Formats.Fbx.Editor", "Autodesk.Fbx"],
+  "includePlatforms": ["Editor"],
+  "autoReferenced": true
+}

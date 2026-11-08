@@ -1,0 +1,16 @@
+{
+  "name": "com.da1sycr.unity3dsmaxbridge",
+  "version": "0.2.0-beta.1",
+  "displayName": "Unity3dsMaxBridge",
+  "description": "Edit static Unity prefab meshes in 3ds Max and write geometry and material assignments back to source FBX assets.",
+  "unity": "6000.0",
+  "license": "MIT",
+  "author": { "name": "Da1syCR", "url": "https://github.com/Da1syCR" },
+  "documentationUrl": "https://github.com/Da1syCR/Unity3dsMaxBridge#readme",
+  "changelogUrl": "https://github.com/Da1syCR/Unity3dsMaxBridge/blob/main/CHANGELOG.md",
+  "licensesUrl": "https://github.com/Da1syCR/Unity3dsMaxBridge/blob/main/LICENSE",
+  "dependencies": {
+    "com.unity.formats.fbx": "5.1.3"
+  },
+  "keywords": ["3ds-max", "fbx", "prefab", "editor"]
+}

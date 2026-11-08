@@ -1,0 +1,27 @@
+Unity3dsMaxBridge
+
+English
+1. Install through Unity Package Manager (Git URL or extracted package.json).
+2. Open Tools > Unity3dsMaxBridge > Open. Select English in the header.
+3. Click Connect. In Max use Scripting > Run Script and paste the copied Connect_Max.ms path.
+4. Drop a saved prefab into Unity and click Send prefab.
+5. Edit in Max and click Update now. Ctrl+S export is optional and starts disabled.
+6. Drop Unity materials to send them to the matching active Max session.
+
+Keep the Max bridge window open during exchange. Unity Bridge reopens it.
+Independent copy creates a separate prefab/models before editing shared geometry.
+Diagnostics and files opens the session backups and logs.
+See README.md for installation, limitations, updating and uninstalling.
+
+Русский
+1. Установите пакет через Package Manager: Git URL или распакованный package.json.
+2. Откройте Tools > Unity3dsMaxBridge > Open. Выберите Русский в шапке.
+3. Нажмите Подключить. В Max откройте Scripting > Run Script и вставьте скопированный путь Connect_Max.ms.
+4. Перетащите сохранённый prefab в Unity и нажмите Отправить префаб.
+5. Редактируйте в Max и нажмите Update now. Экспорт по Ctrl+S включается отдельно.
+6. Перетаскивайте Unity-материалы для отправки в активную сессию Max.
+
+Окно моста Max должно быть открыто во время обмена. Кнопка Unity Bridge открывает его повторно.
+Независимая копия создаёт отдельный prefab и модели перед редактированием общей геометрии.
+Диагностика и файлы открывает резервные копии и журналы сессии.
+Полная инструкция, ограничения, обновление и удаление — в README.ru.md.
